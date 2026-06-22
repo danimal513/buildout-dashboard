@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buildout CS Compliance Dashboard</title>
+  <style>
+    /* ── CONFIG: replace with your deployed Worker URL ── */
+    /* See README for deployment instructions             */
+
+    :root {
+      --worker-url: ; /* set via JS below */
+      --bg: #f7f6f3;
+      --surface: #ffffff;
+      --surface-2: #f0efe9;
+      --border: #e4e2d9;
+      --border-strong: #ccc9bc;
+      --text: #1a1916;
+      --text-2: #6b6860;
+      --text-3: #9b9890;
+      --green: #1a7a56;
+      --green-bg: #e8f5ef;
+      --amber: #8c5a0e;
+      --amber-bg: #fdf3e0;
+      --red: #8b2020;
+      --red-bg: #fceaea;
+      --accent: #2a5ce6;
+      --radius: 8px;
+      --radius-sm: 5px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+    .header p { font-size: 13px; color: var(--text-2); margin-top: 3px; }
+    .live-badge { font-size: 11px; font-weight: 500; background: var(--green-bg); border: 1px solid #a8d5c0; color: var(--green); padding: 5px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Controls ── */
+    .ctrl-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; }
+    .ctrl-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+    .fld { display: flex; flex-direction: column; gap: 5px; }
+    .fld-lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+    .search-wrap { position: relative; flex: 1; min-width: 220px; }
+    .s-input { width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
+    .s-input:focus { border-color: var(--accent); }
+    .s-dd { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: 0 4px 14px rgba(0,0,0,.09); z-index: 99; max-height: 220px; overflow-y: auto; }
+    .dd-item { padding: 9px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); }
+    .dd-item:last-child { border-bottom: none; }
+    .dd-item:hover { background: var(--surface-2); }
+    .dd-empty { padding: 12px; font-size: 13px; color: var(--text-3); text-align: center; }
+    select.tf { padding: 8px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); outline: none; font-family: inherit; cursor: pointer; min-width: 152px; }
+    select.tf:focus { border-color: var(--accent); }
+    .btn-srch { padding: 8px 16px; font-size: 13px; font-weight: 500; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+    .btn-srch:hover:not(:disabled) { background: var(--border); }
+    .btn-analyze { padding: 8px 18px; font-size: 13px; font-weight: 500; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); cursor: pointer; }
+    .btn-analyze:hover:not(:disabled) { opacity: 0.88; }
+    .btn-srch:disabled, .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 9px; padding: 4px 8px 4px 12px; background: var(--green-bg); border: 1px solid #a8d5c0; border-radius: 20px; font-size: 12px; color: var(--green); font-weight: 500; }
+    .chip-x { cursor: pointer; opacity: 0.6; font-size: 15px; line-height: 1; }
+    .chip-x:hover { opacity: 1; }
+
+    /* ── Progress ── */
+    .prog-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+    .prog-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+    .prog-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: blink 1s infinite; flex-shrink: 0; }
+
+    /* ── Results ── */
+    .res-grid { display: grid; grid-template-columns: 260px 1fr; gap: 14px; margin-bottom: 18px; }
+    .score-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .score-big { font-size: 52px; font-weight: 700; letter-spacing: -2px; line-height: 1; }
+    .s-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin-bottom: 3px; font-weight: 600; }
+    .s-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .sg { background: var(--green-bg); color: var(--green); }
+    .sw { background: var(--amber-bg); color: var(--amber); }
+    .sb { background: var(--red-bg); color: var(--red); }
+    .sn { background: var(--surface-2); color: var(--text-3); }
+    .btrk { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+    .bfil { height: 6px; border-radius: 3px; }
+    .meta { display: flex; flex-direction: column; gap: 7px; }
+    .mi { display: flex; justify-content: space-between; font-size: 12px; }
+    .mk { color: var(--text-3); }
+    .mv { font-weight: 500; font-family: 'SF Mono', 'Consolas', monospace; }
+    .btn-save { padding: 7px 14px; font-size: 12px; font-weight: 500; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-sm); cursor: pointer; }
+    .btn-save:hover { background: var(--accent); color: #fff; }
+    .btn-saved { padding: 7px 14px; font-size: 12px; font-weight: 500; background: var(--green-bg); color: var(--green); border: 1px solid #a8d5c0; border-radius: var(--radius-sm); cursor: default; }
+    .a-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; overflow-y: auto; max-height: 370px; }
+    .a-co { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    .gap-lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin-bottom: 4px; }
+    .gap-txt { font-size: 13px; padding: 8px 12px; background: var(--amber-bg); border-left: 3px solid #d4830a; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: #5c3a08; margin-bottom: 14px; }
+    .a-body p { font-size: 13px; line-height: 1.7; color: var(--text-2); margin-bottom: 10px; }
+    .a-body p:last-child { margin-bottom: 0; }
+
+    /* ── Report table ── */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+    .ph { padding: 11px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .pt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-2); }
+    .rt { width: 100%; border-collapse: collapse; }
+    .rt th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); text-align: left; padding: 9px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .rt td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+    .rt tr:last-child td { border-bottom: none; }
+    .rt tbody tr { cursor: pointer; }
+    .rt tbody tr:hover td { background: var(--bg); }
+    .tbar { width: 46px; height: 5px; background: var(--surface-2); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 7px; overflow: hidden; }
+    .tfil { height: 5px; border-radius: 3px; display: block; }
+
+    /* ── Misc ── */
+    .err-box { background: var(--red-bg); border: 1px solid #e8aaaa; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--red); margin-bottom: 14px; }
+    .empty { text-align: center; padding: 44px 20px; color: var(--text-3); }
+    .empty p { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
+    .empty span { font-size: 13px; }
+
+    @media (max-width: 640px) {
+      .res-grid { grid-template-columns: 1fr; }
+      .ctrl-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+  // ── CONFIGURE THIS after deploying your Cloudflare Worker ──────────────────
+  const WORKER_URL = 'https://buildout-compliance-worker.YOUR-SUBDOMAIN.workers.dev';
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const S = {
+    query: '', results: [], showDD: false, searching: false,
+    company: null, days: 30,
+    analyzing: false, step: '',
+    analysis: null, saved: [],
+    error: null
+  };
+
+  function sc(s) { return s >= 75 ? '#1a7a56' : s >= 50 ? '#d4830a' : '#c0392b'; }
+  function stCls(s) { return s === 'On track' ? 'sg' : s === 'Needs attention' ? 'sw' : 'sb'; }
+  function tfl(d) { return { 7: 'Last 7 days', 14: 'Last 14 days', 30: 'Last 30 days', 60: 'Last 60 days', 90: 'Last 90 days' }[d] || `Last ${d} days`; }
+
+  async function post(path, body) {
+    const res = await fetch(WORKER_URL + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  async function doSearch() {
+    const inp = document.getElementById('si');
+    const q = (inp ? inp.value : '').trim();
+    if (!q) return;
+    S.searching = true; S.results = []; S.showDD = false; S.error = null; render();
+    try {
+      const results = await post('/search', { query: q });
+      S.results = Array.isArray(results) ? results : [];
+      S.showDD = true;
+    } catch (e) { S.error = 'Search failed: ' + e.message; }
+    S.searching = false; render();
+  }
+
+  function pick(i) { S.company = S.results[i]; S.showDD = false; S.results = []; S.analysis = null; S.error = null; render(); }
+  function clearCo() { S.company = null; S.analysis = null; S.error = null; render(); }
+
+  async function doAnalyze() {
+    if (!S.company) return;
+    S.analyzing = true; S.analysis = null; S.error = null;
+    S.step = 'Fetching conversations from Planhat…'; render();
+
+    try {
+      S.step = `Fetching conversations + scoring with AI…`; render();
+      const result = await post('/analyze', {
+        companyId: S.company._id,
+        companyName: S.company.name,
+        days: S.days,
+      });
+      S.analysis = { company: S.company.name, cid: S.company._id, days: S.days, ...result };
+    } catch (e) {
+      S.error = 'Analysis failed: ' + e.message;
+    }
+    S.analyzing = false; render();
+  }
+
+  function saveRpt() {
+    if (!S.analysis) return;
+    const i = S.saved.findIndex(x => x.cid === S.analysis.cid);
+    if (i >= 0) S.saved[i] = S.analysis; else S.saved.push(S.analysis);
+    render();
+  }
+  function viewSaved(i) { S.analysis = S.saved[i]; render(); }
+
+  function render() {
+    const curQ = document.getElementById('si')?.value || '';
+    const a = S.analysis;
+    const isSaved = a && S.saved.some(x => x.cid === a.cid);
+
+    document.getElementById('app').innerHTML = `
+<div class="header">
+  <div>
+    <h1>CS Communication Compliance</h1>
+    <p>Buildout customer standards · Live from Planhat</p>
+  </div>
+  <div class="live-badge"><div class="live-dot"></div>Planhat live</div>
+</div>
+
+${S.error ? `<div class="err-box">${S.error}</div>` : ''}
+
+<div class="ctrl-panel">
+  <div class="ctrl-row">
+    <div class="fld" style="flex:1;min-width:220px">
+      <span class="fld-lbl">Account</span>
+      <div class="search-wrap">
+        <input id="si" class="s-input" placeholder="Search account name…"
+          ${S.company ? 'style="display:none"' : ''}
+          onkeydown="if(event.key==='Enter')doSearch()" />
+        ${S.showDD && S.results.length ? `
+          <div class="s-dd">
+            ${S.results.map((r, i) => `<div class="dd-item" onclick="pick(${i})">${r.name}</div>`).join('')}
+          </div>` : ''}
+        ${S.showDD && !S.results.length && !S.searching ? `
+          <div class="s-dd"><div class="dd-empty">No accounts found</div></div>` : ''}
+      </div>
+      ${S.company ? `<div class="chip">${S.company.name}<span class="chip-x" onclick="clearCo()">×</span></div>` : ''}
+    </div>
+
+    <div class="fld">
+      <span class="fld-lbl">Timeframe</span>
+      <select class="tf" onchange="S.days=parseInt(this.value)" ${S.analyzing ? 'disabled' : ''}>
+        ${[7, 14, 30, 60, 90].map(d => `<option value="${d}"${S.days === d ? ' selected' : ''}>${tfl(d)}</option>`).join('')}
+      </select>
+    </div>
+
+    ${!S.company
+      ? `<div class="fld"><span class="fld-lbl">&nbsp;</span>
+           <button class="btn-srch" onclick="doSearch()" ${S.searching ? 'disabled' : ''}>${S.searching ? 'Searching…' : 'Search'}</button>
+         </div>`
+      : `<div class="fld"><span class="fld-lbl">&nbsp;</span>
+           <button class="btn-analyze" onclick="doAnalyze()" ${S.analyzing ? 'disabled' : ''}>${S.analyzing ? 'Analyzing…' : 'Analyze'}</button>
+         </div>`}
+  </div>
+</div>
+
+${S.analyzing ? `
+  <div class="prog-panel">
+    <div class="prog-row"><div class="prog-dot"></div>${S.step}</div>
+  </div>` : ''}
+
+${a && !S.analyzing ? `
+  <div class="res-grid">
+    <div class="score-card">
+      <div>
+        <div class="s-lbl">Compliance Score</div>
+        <div class="score-big" style="color:${a.score !== null ? sc(a.score) : '#9b9890'}">${a.score !== null ? a.score + '%' : '—'}</div>
+      </div>
+      <div class="btrk"><div class="bfil" style="width:${a.score || 0}%;background:${a.score !== null ? sc(a.score) : '#ccc'}"></div></div>
+      <div><span class="s-tag ${a.score !== null ? stCls(a.status) : 'sn'}">${a.status}</span></div>
+      <div class="meta">
+        <div class="mi"><span class="mk">Comms reviewed</span><span class="mv">${a.commsCount}</span></div>
+        <div class="mi"><span class="mk">Timeframe</span><span class="mv">${tfl(a.days)}</span></div>
+      </div>
+      ${isSaved
+        ? `<button class="btn-saved">Saved to report ✓</button>`
+        : `<button class="btn-save" onclick="saveRpt()">Save to report</button>`}
+    </div>
+
+    <div class="a-card">
+      <div class="a-co">${a.company}</div>
+      ${a.topGap && a.status !== 'No data' ? `
+        <div class="gap-lbl">Top Gap</div>
+        <div class="gap-txt">${a.topGap}</div>` : ''}
+      <div class="a-body">${a.analysis.split('\n\n').map(p => `<p>${p}</p>`).join('')}</div>
+    </div>
+  </div>` : ''}
+
+${S.saved.length ? `
+  <div class="panel">
+    <div class="ph">
+      <span class="pt">Report — ${S.saved.length} account${S.saved.length !== 1 ? 's' : ''}</span>
+    </div>
+    <table class="rt">
+      <thead><tr><th>Account</th><th>Score</th><th>Comms</th><th>Status</th><th>Top Gap</th></tr></thead>
+      <tbody>
+        ${[...S.saved].sort((a, b) => (a.score || 0) - (b.score || 0)).map(r => `
+          <tr onclick="viewSaved(${S.saved.indexOf(r)})">
+            <td style="font-weight:500">${r.company}</td>
+            <td>
+              <span class="tbar"><span class="tfil" style="width:${r.score || 0}%;background:${r.score !== null ? sc(r.score) : '#ccc'}"></span></span>
+              <span style="font-family:monospace;font-weight:500;color:${r.score !== null ? sc(r.score) : '#9b9890'}">${r.score !== null ? r.score + '%' : '—'}</span>
+            </td>
+            <td style="color:#9b9890;font-family:monospace;font-size:12px">${r.commsCount}</td>
+            <td><span class="s-tag ${r.score !== null ? stCls(r.status) : 'sn'}" style="font-size:10px;padding:2px 8px">${r.status}</span></td>
+            <td style="color:#6b6860;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.topGap || ''}">${r.topGap || '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+${!S.analyzing && !a && !S.error ? `
+  <div class="empty">
+    <p>Search for an account to begin</p>
+    <span>Type a name → select from results → Analyze</span>
+  </div>` : ''}`;
+
+    const si = document.getElementById('si');
+    if (si && !S.company) si.value = curQ;
+  }
+
+  render();
+</script>
+</body>
+</html>
