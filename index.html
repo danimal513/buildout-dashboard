@@ -84,11 +84,18 @@
     .btrk { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
     .bfil { height: 6px; border-radius: 3px; }
     .meta { display: flex; flex-direction: column; gap: 7px; }
-    .mi { display: flex; justify-content: space-between; font-size: 12px; }
+    .mi { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
     .mk { color: var(--text-3); } .mv { font-weight: 500; font-family: monospace; }
     .btn-save { padding: 7px 14px; font-size: 12px; font-weight: 500; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-sm); cursor: pointer; }
     .btn-save:hover { background: var(--accent); color: #fff; }
     .btn-saved { padding: 7px 14px; font-size: 12px; font-weight: 500; background: var(--green-bg); color: var(--green); border: 1px solid #a8d5c0; border-radius: var(--radius-sm); cursor: default; }
+
+    /* Planhat health badge (0-10 snapshot at query time) */
+    .hb { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; font-family: monospace; white-space: nowrap; }
+    .hb-g { background: var(--green-bg); color: var(--green); }
+    .hb-a { background: var(--amber-bg); color: var(--amber); }
+    .hb-r { background: var(--red-bg); color: var(--red); }
+    .hb-n { background: var(--surface-2); color: var(--text-3); }
 
     /* Next step card */
     .nextstep-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
@@ -110,7 +117,7 @@
     .a-body p:last-child { margin-bottom: 0; }
 
     .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
-    .ph { padding: 11px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .ph { padding: 11px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .pt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--text-2); }
     .rt { width: 100%; border-collapse: collapse; }
     .rt th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); text-align: left; padding: 9px 14px; background: var(--bg); border-bottom: 1px solid var(--border); }
@@ -120,6 +127,16 @@
     .rt tbody tr:hover td { background: var(--bg); }
     .tbar { width: 46px; height: 5px; background: var(--surface-2); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 7px; overflow: hidden; }
     .tfil { height: 5px; border-radius: 3px; display: block; }
+
+    /* Team activity panel */
+    .act-tabs { display: flex; gap: 4px; }
+    .act-tab { padding: 5px 11px; font-size: 12px; font-weight: 500; background: transparent; border: 1px solid var(--border); border-radius: 20px; cursor: pointer; color: var(--text-2); }
+    .act-tab:hover { background: var(--surface-2); }
+    .act-tab.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+    .act-empty { padding: 22px; text-align: center; font-size: 13px; color: var(--text-3); }
+    .act-note { padding: 14px 16px; font-size: 12px; color: var(--text-3); line-height: 1.6; }
+    .act-note code { font-family: monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+    .act-time { color: var(--text-3); font-size: 12px; font-family: monospace; }
 
     .err-box { background: var(--red-bg); border: 1px solid #e8aaaa; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: var(--red); margin-bottom: 14px; }
     .empty { text-align: center; padding: 44px 20px; color: var(--text-3); }
@@ -141,6 +158,7 @@
     browseOpen: false, browseAccounts: [], browseFilter: '', browseLoading: false,
     analyzing: false, step: '',
     analysis: null, saved: [],
+    activity: null, activityTab: 'recent',
     error: null
   };
 
@@ -148,6 +166,21 @@
   function stCls(s) { return s === 'On track' ? 'sg' : s === 'Needs attention' ? 'sw' : 'sb'; }
   function nsCls(p) { return p === 'High' ? 'ns-high' : p === 'Medium' ? 'ns-medium' : 'ns-low'; }
   function tfl(d) { return {7:'Last 7 days',14:'Last 14 days',30:'Last 30 days',60:'Last 60 days',90:'Last 90 days'}[d]||`Last ${d} days`; }
+
+  // Planhat health snapshot (0-10). Colored badge; grey dash when unavailable.
+  function healthBadge(h) {
+    if (h === null || h === undefined) return `<span class="hb hb-n">—</span>`;
+    const cls = h >= 7 ? 'hb-g' : h >= 4 ? 'hb-a' : 'hb-r';
+    return `<span class="hb ${cls}">${h}/10</span>`;
+  }
+  function ago(iso) {
+    if (!iso) return '';
+    const s = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (s < 60) return 'just now';
+    const m = s / 60; if (m < 60) return Math.floor(m) + 'm ago';
+    const h = m / 60; if (h < 24) return Math.floor(h) + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
 
   async function post(path, body) {
     const res = await fetch(WORKER_URL + path, {
@@ -205,6 +238,7 @@
       S.analysis = { company: S.company.name, cid: S.company._id, days: S.days, ...result };
     } catch (e) { S.error = 'Analysis failed: ' + e.message; }
     S.analyzing = false; render();
+    loadActivity(); // refresh the team activity panel with this new query
   }
 
   function saveRpt() {
@@ -215,11 +249,61 @@
   }
   function viewSaved(i) { S.analysis = S.saved[i]; render(); }
 
+  // ---- team activity --------------------------------------------------------
+  async function loadActivity() {
+    try { S.activity = await post('/activity', {}); }
+    catch (e) { /* non-fatal: panel just won't show */ }
+    render();
+  }
+  function setActTab(k) { S.activityTab = k; render(); }
+  function actClick(tab, i) {
+    const r = S.activity && S.activity[tab] && S.activity[tab][i];
+    if (!r) return;
+    S.company = { _id: r.companyId, name: r.companyName };
+    if (r.lastDays) S.days = r.lastDays;
+    S.analysis = null; S.error = null; render();
+    doAnalyze();
+  }
+
+  function activityPanel() {
+    if (!S.activity) return '';
+    if (!S.activity.configured) {
+      return `<div class="panel"><div class="ph"><span class="pt">Team Activity</span></div>
+        <div class="act-note">Activity tracking is built in but not switched on yet. Create a KV namespace and bind it as <code>ACTIVITY</code> in <code>wrangler.toml</code>, then redeploy — queries will start logging here automatically.</div></div>`;
+    }
+    const tab = S.activityTab;
+    const list = S.activity[tab] || [];
+    const tabs = [['recent','Recent'],['mostQueried','Most queried'],['lowestScoring','Lowest scoring']];
+    const col4 = { recent: 'Last queried', mostQueried: 'Queries', lowestScoring: 'Status' }[tab];
+    const rows = list.map((r, i) => `
+      <tr onclick="actClick('${tab}',${i})">
+        <td style="font-weight:500">${r.companyName}</td>
+        <td><span class="tbar"><span class="tfil" style="width:${r.lastScore||0}%;background:${r.lastScore!==null?sc(r.lastScore):'#ccc'}"></span></span>
+          <span style="font-family:monospace;font-weight:500;color:${r.lastScore!==null?sc(r.lastScore):'#9b9890'}">${r.lastScore!==null?r.lastScore+'%':'—'}</span></td>
+        <td>${healthBadge(r.planhatHealth)}</td>
+        <td>${
+          tab === 'recent' ? `<span class="act-time">${ago(r.lastQueried)}</span>`
+          : tab === 'mostQueried' ? `<span style="font-family:monospace">${r.count}×</span>`
+          : `<span class="s-tag ${r.lastScore!==null?stCls(r.lastStatus):'sn'}" style="font-size:10px;padding:2px 8px">${r.lastStatus||'—'}</span>`
+        }</td>
+      </tr>`).join('');
+    return `<div class="panel">
+      <div class="ph">
+        <span class="pt">Team Activity${S.activity.total ? ` — ${S.activity.total} account${S.activity.total!==1?'s':''} queried` : ''}</span>
+        <div class="act-tabs">${tabs.map(([k,label])=>`<button class="act-tab ${tab===k?'active':''}" onclick="setActTab('${k}')">${label}</button>`).join('')}</div>
+      </div>
+      ${!list.length
+        ? `<div class="act-empty">No accounts queried yet — run an analysis and it'll show up here.</div>`
+        : `<table class="rt"><thead><tr><th>Account</th><th>Compliance</th><th>Planhat Health</th><th>${col4}</th></tr></thead><tbody>${rows}</tbody></table>`}
+    </div>`;
+  }
+
   function render() {
     const curQ = document.getElementById('si')?.value || '';
     const a = S.analysis;
     const isSaved = a && S.saved.some(x => x.cid === a.cid);
     const filteredBrowse = S.browseAccounts.filter(c => !S.browseFilter || c.name.toLowerCase().includes(S.browseFilter.toLowerCase()));
+    const hasActivity = S.activity && S.activity.configured && S.activity.total > 0;
 
     document.getElementById('app').innerHTML = `
 <div class="header">
@@ -289,6 +373,7 @@ ${a && !S.analyzing ? `
     <div class="btrk"><div class="bfil" style="width:${a.score||0}%;background:${a.score!==null?sc(a.score):'#ccc'}"></div></div>
     <div><span class="s-tag ${a.score!==null?stCls(a.status):'sn'}">${a.status}</span></div>
     <div class="meta">
+      <div class="mi"><span class="mk">Planhat health</span><span class="mv">${healthBadge(a.planhatHealth)}</span></div>
       <div class="mi"><span class="mk">Comms reviewed</span><span class="mv">${a.commsCount}</span></div>
       <div class="mi"><span class="mk">Timeframe</span><span class="mv">${tfl(a.days)}</span></div>
     </div>
@@ -319,13 +404,14 @@ ${S.saved.length ? `
 <div class="panel">
   <div class="ph"><span class="pt">Report — ${S.saved.length} account${S.saved.length!==1?'s':''}</span></div>
   <table class="rt">
-    <thead><tr><th>Account</th><th>Score</th><th>Comms</th><th>Status</th><th>Next Step</th><th>Priority</th></tr></thead>
+    <thead><tr><th>Account</th><th>Score</th><th>Health</th><th>Comms</th><th>Status</th><th>Next Step</th><th>Priority</th></tr></thead>
     <tbody>
       ${[...S.saved].sort((a,b)=>(a.score||0)-(b.score||0)).map(r=>`
         <tr onclick="viewSaved(${S.saved.indexOf(r)})">
           <td style="font-weight:500">${r.company}</td>
           <td><span class="tbar"><span class="tfil" style="width:${r.score||0}%;background:${r.score!==null?sc(r.score):'#ccc'}"></span></span>
             <span style="font-family:monospace;font-weight:500;color:${r.score!==null?sc(r.score):'#9b9890'}">${r.score!==null?r.score+'%':'—'}</span></td>
+          <td>${healthBadge(r.planhatHealth)}</td>
           <td style="color:#9b9890;font-family:monospace;font-size:12px">${r.commsCount}</td>
           <td><span class="s-tag ${r.score!==null?stCls(r.status):'sn'}" style="font-size:10px;padding:2px 8px">${r.status}</span></td>
           <td style="color:#6b6860;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.nextStep||''}">${r.nextStep||'—'}</td>
@@ -335,7 +421,9 @@ ${S.saved.length ? `
   </table>
 </div>` : ''}
 
-${!S.analyzing && !a && !S.error ? `
+${activityPanel()}
+
+${!S.analyzing && !a && !S.error && !hasActivity ? `
 <div class="empty">
   <p>Search or browse for an account to begin</p>
   <span>Use Search for a specific name, or Browse all to scroll every account</span>
@@ -346,6 +434,7 @@ ${!S.analyzing && !a && !S.error ? `
   }
 
   render();
+  loadActivity();
 </script>
 </body>
 </html>
